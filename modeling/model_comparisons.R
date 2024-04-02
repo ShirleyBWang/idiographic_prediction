@@ -1,4 +1,4 @@
-## U01 idiographic analyses - for diss
+## U01 idiographic analyses 
 
 ##---- packages ----
 library(tidyverse)
@@ -6,15 +6,15 @@ library(lubridate)
 library(caret)
 library(MLmetrics)
 library(RANN)
-library(tsfeaturex)
-library(glmnet)
-library(hydroGOF) 
 library(psych)
 library(reshape2)
 library(corrplot)
 library(tidymodels)
 library(forecast)
 library(conflicted)
+library(emmeans)
+library(lme4)
+library(emmeans)
 tidymodels_prefer()
 #library(Metrics)
 
@@ -24,10 +24,10 @@ tidymodels_prefer()
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 # urge results
-baseline_urge_ar1 <- read.csv("results/baseline_ar1_urge_metrics.csv")
+baseline_urge_ar1 <- read.csv("../results/baseline_ar1_urge_metrics.csv")
 baseline_urge_affect <- read.csv("results/baseline_urge_affect.csv")
-gp_urge_only <- read.csv("results/gp_urge_only_window.csv")
-gp_urge_affect <- read.csv("results/urge_gp_affect_window.csv")
+gp_urge_only <- read.csv("../results/gp_urge_only_window.csv")
+gp_urge_affect <- read.csv("../results/urge_gp_affect_window.csv")
 
 # merge urge results 
 baseline_urge_ar1_tomerge <- baseline_urge_ar1 %>% 
@@ -48,10 +48,10 @@ urge_models_all <- baseline_urge_ar1_tomerge %>%
   merge(gp_urge_affect_tomerge, by = "ppt_id")
 
 # intent results
-baseline_intent_ar1 <- read.csv("results/baseline_ar1_intent_metrics.csv")
+baseline_intent_ar1 <- read.csv("../results/baseline_ar1_intent_metrics.csv")
 baseline_intent_affect <- read.csv("results/baseline_intent_affect.csv")
-gp_intent_only <- read.csv("results/gp_intent_only_window.csv")
-gp_intent_affect <- read.csv("results/intent_gp_affect_window.csv")
+gp_intent_only <- read.csv("../results/gp_intent_only_window.csv")
+gp_intent_affect <- read.csv("../results/intent_gp_affect_window.csv")
 
 # merge intent results 
 baseline_intent_ar1_tomerge <- baseline_intent_ar1 %>% 
@@ -85,6 +85,67 @@ baseline_intent_affect %>% describe()
 gp_intent_only %>% describe()
 gp_intent_affect %>% describe()
 
+##---- low, medium, large effect sizes ----
+breaks <- c(0, 0.02, 0.13, 0.26, 1)
+
+## urge
+baseline_urge_ar1 %>% 
+  mutate(interval = cut(r2, breaks = breaks, labels = c("<0.02", "0.02-0.13", "0.13-0.26", ">0.26"))) %>%
+  group_by(interval) %>%
+  summarize(count = n())
+
+baseline_urge_affect %>% 
+  mutate(interval = cut(r2, breaks = breaks, labels = c("<0.02", "0.02-0.13", "0.13-0.26", ">0.26"))) %>%
+  group_by(interval) %>%
+  summarize(count = n())
+
+gp_urge_only %>% 
+  mutate(interval = cut(r2, breaks = breaks, labels = c("<0.02", "0.02-0.13", "0.13-0.26", ">0.26"))) %>%
+  group_by(interval) %>%
+  summarize(count = n())
+
+gp_urge_affect %>% 
+  mutate(interval = cut(r2, breaks = breaks, labels = c("<0.02", "0.02-0.13", "0.13-0.26", ">0.26"))) %>%
+  group_by(interval) %>%
+  summarize(count = n())
+
+## intent
+baseline_intent_ar1 %>% 
+  mutate(interval = cut(r2, breaks = breaks, labels = c("<0.02", "0.02-0.13", "0.13-0.26", ">0.26"))) %>%
+  group_by(interval) %>%
+  summarize(count = n())
+
+baseline_intent_affect %>% 
+  mutate(interval = cut(r2, breaks = breaks, labels = c("<0.02", "0.02-0.13", "0.13-0.26", ">0.26"))) %>%
+  group_by(interval) %>%
+  summarize(count = n())
+
+gp_intent_only %>% 
+  mutate(interval = cut(r2, breaks = breaks, labels = c("<0.02", "0.02-0.13", "0.13-0.26", ">0.26"))) %>%
+  group_by(interval) %>%
+  summarize(count = n())
+
+gp_intent_affect %>% 
+  mutate(interval = cut(r2, breaks = breaks, labels = c("<0.02", "0.02-0.13", "0.13-0.26", ">0.26"))) %>%
+  group_by(interval) %>%
+  summarize(count = n())
+
+##---- statistical comparison ----
+urge_r2_melted <- urge_models_all %>% 
+  select(contains("r2"), ppt_id) %>% melt(id.vars = "ppt_id") 
+urge_r2_lmer_null <- lmerTest::lmer(value ~ (1 | ppt_id), data = urge_r2_melted)
+urge_r2_lmer <- lmerTest::lmer(value ~ variable + (1 | ppt_id), data = urge_r2_melted)
+anova(urge_r2_lmer_null, urge_r2_lmer)
+lsmeans::lsmeans(urge_r2_lmer, pairwise ~ variable, adjust = "tukey")
+
+intent_r2_melted <- intent_models_all %>% 
+  select(contains("r2"), ppt_id) %>% melt(id.vars = "ppt_id") 
+intent_r2_lmer_null <- lmerTest::lmer(value ~ (1 | ppt_id), data = intent_r2_melted)
+intent_r2_lmer <- lmerTest::lmer(value ~ variable + (1 | ppt_id), data = intent_r2_melted)
+anova(intent_r2_lmer_null, intent_r2_lmer)
+lsmeans::lsmeans(intent_r2_lmer, pairwise ~ variable, adjust = "tukey")
+
+##---- prep for plot ----
 ## set RMSE of the high intent (affect gp) to NA
 which(gp_intent_affect$rmse > 30)
 gp_intent_affect$rmse[67] <- NA
@@ -114,10 +175,12 @@ intent_violin_melted$Metric <- intent_violin_melted$Metric %>%
 
 ## ggplot
 intent_violin_melted %>% 
-  ggplot(., aes(x = variable, y = value, color = variable, fill = variable)) +
-  geom_violin(size = 0.6, alpha = 0.2) +
-  geom_boxplot(width=0.1, alpha = 0.5) +
-  stat_summary(fun = mean, geom = "point", shape = 18, size = 8) +
+  ggplot(., aes(x = variable, y = value, color = after_scale(alpha(fill, 0.6)), fill = variable)) +
+  geom_point(size = 0.7) +
+  geom_violin(size = 0.6, alpha = 0.1) +
+  geom_boxplot(width=0.1, alpha = 0.2, fatten = 3, outlier.shape = NA) +
+  stat_summary(fun = mean, geom = "point", shape = 18, size = 6) +
+  stat_summary(fun = median, geom = "crossbar", size = 0.5, width = 0.15) +
   ggtitle("Idiographic Prediction Model Metrics: \nPredicting Suicidal Intent") +
   facet_wrap(~Metric, scales = "free") +
   theme_bw() + 
@@ -128,15 +191,13 @@ intent_violin_melted %>%
   guides(fill = FALSE) +
   scale_color_manual(values = c("#8B8B8B", "#789B60", "#56A2A5", "#6F4988")) +
   scale_fill_manual(values = c("#8B8B8B", "#789B60", "#56A2A5", "#6F4988"))
-ggsave("figs/intent_models/intent_mod_comparison.pdf", bg='transparent', width = 10, height = 6)
+ggsave("figs/intent_mod_comparison.pdf", bg='transparent', width = 12, height = 6)
 
 ##---- violin plots for urge ----
 baseline_ar1_urge_melted <- melt(baseline_urge_ar1, value.name = "Baseline (AR1)", variable.name = "Metric")
 baseline_urge_affect_melted <- melt(baseline_urge_affect, value.name = "BaselineAffect", variable.name = "Metric")
 gp_urge_melted <- melt(gp_urge_only, value.name = "SimpleGP", variable.name = "Metric")
 gp_urge_affect_melted <- melt(gp_urge_affect, value.name = "GPAffect", variable.name = "Metric")
-
-#baseline_urge_ar1$ppt_id[which(baseline_urge_ar1$ppt_id %notin% baseline_urge_affect$ppt_id)]
 
 urge_violin_dat <- as.data.frame(cbind(baseline_ar1_urge_melted, 
                                        baseline_urge_affect_melted$BaselineAffect,
@@ -151,10 +212,12 @@ urge_violin_melted$Metric <- urge_violin_melted$Metric %>%
 
 ## ggplot
 urge_violin_melted %>% 
-  ggplot(., aes(x = variable, y = value, color = variable, fill = variable)) +
-  geom_violin(size = 0.6, alpha = 0.2) +
-  geom_boxplot(width=0.1, alpha = 0.5) +
-  stat_summary(fun = mean, geom = "point", shape = 18, size = 8) +
+  ggplot(., aes(x = variable, y = value, color = after_scale(alpha(fill, 0.6)), fill = variable)) +
+  geom_point(size = 0.7) +
+  geom_violin(size = 0.6, alpha = 0.1) +
+  geom_boxplot(width=0.1, alpha = 0.2, fatten = 3, outlier.shape = NA) +
+  stat_summary(fun = mean, geom = "point", shape = 18, size = 6) +
+  stat_summary(fun = median, geom = "crossbar", size = 0.5, width = 0.15) +
   ggtitle("Idiographic Prediction Model Metrics: \nPredicting Suicidal Urges") +
   facet_wrap(~Metric, scales = "free") +
   theme_bw() + 
@@ -165,7 +228,7 @@ urge_violin_melted %>%
   guides(fill = FALSE) +
   scale_color_manual(values = c("#8B8B8B", "#789B60", "#56A2A5", "#6F4988")) +
   scale_fill_manual(values = c("#8B8B8B", "#789B60", "#56A2A5", "#6F4988"))
-ggsave("figs/urge_models/urge_mod_comparison.pdf", bg='transparent', width = 10, height = 6)
+ggsave("figs/urge_mod_comparison.pdf", bg='transparent', width = 12, height = 6)
 
 
 ##---- Urge correlations ----
