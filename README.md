@@ -1,5 +1,5 @@
 # Idiographic Prediction of Suicidal Thoughts 
-### (Wang et al., in prep)
+### (Wang et al., under review)
 
 This repository includes:
 
